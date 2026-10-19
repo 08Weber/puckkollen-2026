@@ -1,0 +1,10 @@
+{
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "tv-pucken-2026.vercel.app" }],
+      "destination": "https://puckkollen-2026.vercel.app/$1",
+      "permanent": false
+    }
+  ]
+}

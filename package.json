@@ -1,0 +1,1 @@
+{"name":"tv-pucken","private":true,"type":"module","scripts":{"data":"node scripts/build-data.js"}}
