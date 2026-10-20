@@ -42,6 +42,14 @@ for (const t of data.teams)
     playerByStatKey.set(`${t.name}|${p.last}, ${p.first}`, [t, p]);
   }
 let games = data.games;
+const tvById = new Map(data.games.filter((g) => g.tvId).map((g) => [g.id, g.tvId]));
+const TV_COMP = '6ad452cbac6ac10a664b9636';
+const tvUrl = (g) => {
+  const id = g.tvId || tvById.get(g.id);
+  return id
+    ? `https://www.svenskhockey.tv/sv/game/${encodeURIComponent(id)}`
+    : `https://www.svenskhockey.tv/sv/competition/${TV_COMP}`;
+};
 let updated = data.updated;
 let stats = { players: new Map(), goalies: new Map(), pen: new Map() };
 
@@ -115,12 +123,13 @@ function matchCard(g, isNext, favNames = favTeamNames()) {
     ? ''
     : `<div class="when">${isNext ? '<span class="next-tag">Nästa</span>' : ''}<b>${esc(g.time)}</b><span>${dayShort.format(noon(g.date))}</span></div>`;
   const status = periods > 3 ? 'Slut · förl.' : periods === 3 ? 'Slut' : 'Pågår';
+  const tvLink = `<a href="${esc(tvUrl(g))}" target="_blank" rel="noopener">SvenskHockey.tv ↗</a>`;
   const foot = played
     ? `<div class="match-foot">
         <span><span class="state${status === 'Pågår' ? ' live' : ''}">${status}</span>${g.periods ? ` · ${esc(g.periods)}` : ''}</span>
-        ${g.eventsUrl ? `<a href="https://stats.swehockey.se${esc(g.eventsUrl)}" target="_blank" rel="noopener">Matchrapport ↗</a>` : ''}
+        <span>${g.eventsUrl ? `<a href="https://stats.swehockey.se${esc(g.eventsUrl)}" target="_blank" rel="noopener">Matchrapport ↗</a> · ` : ''}${tvLink}</span>
       </div>`
-    : '';
+    : `<div class="match-foot">${tvLink}</div>`;
   return `
     <article class="match${played ? ' played' : ''}${isNext ? ' next' : ''}${fav ? ' fav' : ''}" style="--g:${GROUP_COLORS[L]}">
       <div class="match-top"><span class="grp">${groupName(L)}</span><span class="venue">${esc(g.venue)}</span></div>

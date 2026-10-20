@@ -2,7 +2,7 @@
 // Usage: node scripts/build-data.js  -> writes public/data.json
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { REMOVED_PLAYERS } from '../lib/removed.js';
-import { BASE, SERIES_ID, parseRoster, parseSchedule } from '../lib/swehockey.js';
+import { BASE, SERIES_ID, TV_API, attachTvIds, parseRoster, parseSchedule } from '../lib/swehockey.js';
 
 const get = async (url) => {
   const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -62,6 +62,8 @@ const scheduleHtml = await (await get(`${BASE}/ScheduleAndResults/Schedule/${SER
 const teams = parseRoster(rosterHtml);
 for (const t of teams) t.players = t.players.filter((p) => !REMOVED_PLAYERS.has(`${t.name}|${p.last}, ${p.first}`));
 const schedule = parseSchedule(scheduleHtml);
+const tvBroadcasts = await fetch(TV_API, { headers: { 'site-id': 'SIF' } }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+attachTvIds(schedule.games, tvBroadcasts);
 
 const players = teams.flatMap((t) => t.players);
 let found = 0;
