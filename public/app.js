@@ -27,6 +27,7 @@ const noon = (d) => new Date(`${d}T12:00`);
 // shortcut: times are Swedish local time and parsed in the viewer's zone; fine for viewers in Sweden.
 const start = (g) => new Date(`${g.date}T${g.time}`);
 const GAME_MS = 150 * 60 * 1000;
+const inPlay = (g, now = Date.now()) => start(g).getTime() <= now && now < start(g).getTime() + GAME_MS;
 
 const data = await fetch('data.json').then((r) => r.json());
 const teamByName = new Map(data.teams.map((t) => [t.name, t]));
@@ -202,7 +203,7 @@ function renderHero() {
   const first = start(games[0]).getTime();
   const final = games.at(-1);
   const next = nextGame(now);
-  const live = games.some((g) => start(g).getTime() <= now && now < start(g).getTime() + GAME_MS && !(g.periods?.split(',').length >= 3));
+  const live = games.some((g) => inPlay(g, now) && !(g.periods?.split(',').length >= 3));
 
   let status;
   if (now < first) {
@@ -812,10 +813,10 @@ $('#team').addEventListener('click', (e) => {
 });
 
 // Results and player stats come live from the API (CDN-cached); data.json is only first paint / fallback.
-async function refresh() {
-  const [sched, st, tbl] = await Promise.all(
-    ['/api/schedule', '/api/stats', '/api/standings'].map((u) => fetch(u).then((r) => (r.ok ? r.json() : null)).catch(() => null))
-  );
+// `full` also fetches player stats and standings; otherwise only results.
+async function refresh(full = true) {
+  const get = (u) => fetch(u).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const [sched, st, tbl] = await Promise.all([get('/api/schedule'), full ? get('/api/stats') : null, full ? get('/api/standings') : null]);
   if (tbl) official = tbl;
   if (st) {
     stats = {
@@ -834,5 +835,17 @@ async function refresh() {
     setUpdated(!!sched);
   }
 }
-refresh();
-setInterval(refresh, 120000);
+// Results every 15 s while a game is on (time window, so it keeps going between periods); everything every 2 min.
+const SLOW_MS = 120000;
+const FAST_MS = 15000;
+let lastFull = 0;
+async function tick() {
+  const full = Date.now() - lastFull >= SLOW_MS - FAST_MS / 2;
+  if (full) lastFull = Date.now();
+  try {
+    await refresh(full);
+  } finally {
+    setTimeout(tick, games.some((g) => inPlay(g)) ? FAST_MS : SLOW_MS);
+  }
+}
+tick();
