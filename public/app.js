@@ -258,7 +258,7 @@ function renderHero() {
   else if (now < first) {
     const h = Math.floor((first - now) / 36e5);
     const left = h >= 24 ? `${Math.floor(h / 24)} d ${h % 24} h` : `${h} h ${Math.floor(((first - now) % 36e5) / 6e4)} min`;
-    status = `<span class="dot"></span>Nedsläpp om <b>${left}</b>`;
+    status = `Nedsläpp om <b>${left}</b>`;
   } else if (next) status = `<span class="dot"></span>Pågår · nästa match <b>${dayShort.format(noon(next.date))} ${esc(next.time)}</b>`;
   else status = `<span class="dot"></span><b>Turneringen är avgjord</b>`;
   $('#status').innerHTML = status;
