@@ -42,7 +42,7 @@ const teamByCode = new Map(data.teams.map((t) => [t.code, t]));
 const totalPlayers = data.teams.reduce((n, t) => n + t.players.length, 0);
 const years = [...new Set(data.teams.flatMap((t) => t.players.map((p) => p.born)))].sort();
 document.title = `TV-pucken 2026 · ${SERIES.label} – inofficiell fansida`;
-$('#eyebrow').textContent = `${SERIES.label} · distriktslag födda ${years[0]}${years.length > 1 ? `–${years.at(-1)}` : ''}`;
+$('#eyebrow').textContent = `${SERIES.label} · distriktslag födda ${years[0]}${years.length > 1 ? `–${years.at(-1).slice(2)}` : ''}`;
 $('#q').placeholder = `Sök bland ${totalPlayers} spelare eller klubbar`;
 $('#srcLink').href = `https://stats.swehockey.se/ScheduleAndResults/Schedule/${SERIES.id}`;
 for (const a of $$('[data-k]')) if (a.dataset.k === K) a.setAttribute('aria-current', 'page');
