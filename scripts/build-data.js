@@ -1,8 +1,8 @@
 // Scrapes rosters + schedule from swehockey and resolves each player's Elite Prospects profile.
-// Usage: node scripts/build-data.js  -> writes public/data.json
+// Usage: node scripts/build-data.js  -> writes public/data.json (boys) and public/data-f.json (girls)
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { REMOVED_PLAYERS } from '../lib/removed.js';
-import { BASE, SERIES_ID, TV_API, attachTvIds, parseRoster, parseSchedule } from '../lib/swehockey.js';
+import { BASE, SERIES, attachTvIds, parseRoster, parseSchedule, tvApi } from '../lib/swehockey.js';
 
 const get = async (url) => {
   const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -57,23 +57,6 @@ async function pool(items, n, fn) {
   await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) await fn(items[i++]); }));
 }
 
-const rosterHtml = await (await get(`${BASE}/Teams/Info/TeamRoster/${SERIES_ID}`)).text();
-const scheduleHtml = await (await get(`${BASE}/ScheduleAndResults/Schedule/${SERIES_ID}`)).text();
-const teams = parseRoster(rosterHtml);
-for (const t of teams) t.players = t.players.filter((p) => !REMOVED_PLAYERS.has(`${t.name}|${p.last}, ${p.first}`));
-const schedule = parseSchedule(scheduleHtml);
-const tvBroadcasts = await fetch(TV_API, { headers: { 'site-id': 'SIF' } }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-attachTvIds(schedule.games, tvBroadcasts);
-
-const players = teams.flatMap((t) => t.players);
-let found = 0;
-await pool(players, 6, async (p) => {
-  p.ep = await findEP(p);
-  if (p.ep) found++;
-});
-console.log(`EP matched ${found}/${players.length} players`);
-if (found < players.length * 0.5) throw new Error('EP match rate suspiciously low, aborting');
-
 // Logos from Elite Prospects, saved locally under public/logos/ so the site doesn't hotlink.
 const logoDir = new URL('../public/logos/', import.meta.url);
 mkdirSync(logoDir, { recursive: true });
@@ -96,20 +79,6 @@ async function saveLogo(file) {
   return name;
 }
 
-// District teams: EP lists them in the "TV-Pucken" league, sometimes with "-" instead of "/" or without " län".
-await pool(teams, 4, async (t) => {
-  for (const q of [t.name, t.name.replace('/', ' '), t.name.split(/[/ ]/)[0]]) {
-    const hit = (await teamHits(q)).find((h) => h.league === 'TV-Pucken');
-    if (hit) {
-      t.logo = await saveLogo(hit.logo);
-      t.epTeam = `${hit.id}/${hit.slug}`;
-      console.log(`team  ${t.name} -> ${hit.fullteam}`);
-      return;
-    }
-  }
-  console.log(`team  ${t.name} -> NO LOGO`);
-});
-
 // Player clubs: exact name first, else the club's youth/senior variant ("Karlskrona HK U16").
 // Swehockey uses the registered association name; EP the hockey name. Map the ones that differ.
 const CLUB_ALIASES = {
@@ -120,24 +89,58 @@ const CLUB_ALIASES = {
   'Mariestad BoIS HC': 'Mariestad BoIS', 'Sörhaga/Alingsås HK': 'Sörhaga', 'IFK Arboga IK': 'IFK Arboga',
   'Örebro Hockey UF': 'Örebro HUF', 'Kumla Hockey Club': 'Kumla HC',
 };
-const clubs = [...new Set(players.map((p) => p.club))];
-const clubLogos = {};
-await pool(clubs, 4, async (club) => {
-  const q = CLUB_ALIASES[club] ?? club;
-  const hits = await teamHits(q.replace('/', ' ')); // EP search returns nothing for queries containing "/"
-  const want = [norm(club), norm(q)];
-  const hit =
-    hits.find((h) => want.includes(norm(h.fullteam))) ||
-    hits.find((h) => want.includes(norm(h.fullteam.replace(/ (U|J)\d+.*$/, ''))));
-  if (hit) clubLogos[club] = await saveLogo(hit.logo);
-  else console.log(`club  ${club} -> NO LOGO (${hits.slice(0, 3).map((h) => h.fullteam).join(', ')})`);
-});
-console.log(`club logos ${Object.keys(clubLogos).length}/${clubs.length}`);
+for (const [k, file] of [['p', 'data.json'], ['f', 'data-f.json']]) {
+  const series = SERIES[k];
+  const rosterHtml = await (await get(`${BASE}/Teams/Info/TeamRoster/${series.id}`)).text();
+  const scheduleHtml = await (await get(`${BASE}/ScheduleAndResults/Schedule/${series.id}`)).text();
+  const teams = parseRoster(rosterHtml);
+  for (const t of teams) t.players = t.players.filter((p) => !REMOVED_PLAYERS.has(`${t.name}|${p.last}, ${p.first}`));
+  const schedule = parseSchedule(scheduleHtml);
+  const tvBroadcasts = await fetch(tvApi(series), { headers: { 'site-id': 'SIF' } }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  attachTvIds(schedule.games, tvBroadcasts);
 
-// Minors: publish birth year only. The full date was needed above for EP matching (year) and nothing else.
-for (const p of players) p.born = p.born.slice(0, 4);
+  const players = teams.flatMap((t) => t.players);
+  let found = 0;
+  await pool(players, 6, async (p) => {
+    p.ep = await findEP(p);
+    if (p.ep) found++;
+  });
+  console.log(`${file}: EP matched ${found}/${players.length} players`);
+  if (found < players.length * 0.5) throw new Error('EP match rate suspiciously low, aborting');
 
-writeFileSync(
-  new URL('../public/data.json', import.meta.url),
-  JSON.stringify({ built: new Date().toISOString(), teams, clubLogos, ...schedule })
-);
+  // District teams: EP lists them in the "TV-Pucken" league, sometimes with "-" instead of "/" or without " län".
+  await pool(teams, 4, async (t) => {
+    for (const q of [t.name, t.name.replace('/', ' '), t.name.split(/[/ ]/)[0]]) {
+      const hit = (await teamHits(q)).find((h) => h.league === series.epLeague);
+      if (hit) {
+        t.logo = await saveLogo(hit.logo);
+        t.epTeam = `${hit.id}/${hit.slug}`;
+        console.log(`team  ${t.name} -> ${hit.fullteam}`);
+        return;
+      }
+    }
+    console.log(`team  ${t.name} -> NO LOGO`);
+  });
+
+  const clubs = [...new Set(players.map((p) => p.club))];
+  const clubLogos = {};
+  await pool(clubs, 4, async (club) => {
+    const q = CLUB_ALIASES[club] ?? club;
+    const hits = await teamHits(q.replace('/', ' ')); // EP search returns nothing for queries containing "/"
+    const want = [norm(club), norm(q)];
+    const hit =
+      hits.find((h) => want.includes(norm(h.fullteam))) ||
+      hits.find((h) => want.includes(norm(h.fullteam.replace(/ (U|J)\d+.*$/, ''))));
+    if (hit) clubLogos[club] = await saveLogo(hit.logo);
+    else console.log(`club  ${club} -> NO LOGO (${hits.slice(0, 3).map((h) => h.fullteam).join(', ')})`);
+  });
+  console.log(`club logos ${Object.keys(clubLogos).length}/${clubs.length}`);
+
+  // Minors: publish birth year only. The full date was needed above for EP matching (year) and nothing else.
+  for (const p of players) p.born = p.born.slice(0, 4);
+
+  writeFileSync(
+    new URL(`../public/${file}`, import.meta.url),
+    JSON.stringify({ built: new Date().toISOString(), teams, clubLogos, ...schedule })
+  );
+}

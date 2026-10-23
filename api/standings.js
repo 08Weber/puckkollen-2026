@@ -1,7 +1,8 @@
 // Official group standings from swehockey (one overview page per group), cached at the CDN for 2 minutes.
-import { BASE, GROUP_IDS, parseStandings } from '../lib/swehockey.js';
+import { BASE, parseStandings, seriesFor } from '../lib/swehockey.js';
 
-export async function GET() {
+export async function GET(req) {
+  const GROUP_IDS = seriesFor(req).groups;
   const groups = {};
   await Promise.all(
     Object.entries(GROUP_IDS).map(async ([letter, id]) => {

@@ -1,16 +1,17 @@
 // Live schedule/results, re-scraped from swehockey and cached at the CDN for 15 seconds
 // (so at most ~4 swehockey fetches a minute, however many visitors poll during a game).
-import { BASE, SERIES_ID, TV_API, attachTvIds, parseSchedule } from '../lib/swehockey.js';
+import { BASE, attachTvIds, parseSchedule, seriesFor, tvApi } from '../lib/swehockey.js';
 
 // Errors are cached briefly too, so a swehockey outage doesn't turn every visit into a new request to them.
 const FAIL = { status: 502, headers: { 'Cache-Control': 'public, s-maxage=30' } };
 
-export async function GET() {
+export async function GET(req) {
+  const s = seriesFor(req);
   const [res, tv] = await Promise.all([
-    fetch(`${BASE}/ScheduleAndResults/Schedule/${SERIES_ID}`, {
+    fetch(`${BASE}/ScheduleAndResults/Schedule/${s.id}`, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
     }).catch(() => null),
-    fetch(TV_API, { headers: { 'site-id': 'SIF' } })
+    fetch(tvApi(s), { headers: { 'site-id': 'SIF' } })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null),
   ]);

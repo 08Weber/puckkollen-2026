@@ -12,7 +12,14 @@ const COLORS = {
   VTB: ['#151a24', '#ff5a5f'], VGT: ['#4a1d82', '#ffd447'], VML: ['#0077b6', '#ffffff'], ÅNG: ['#a0522d', '#ffffff'],
   ÖRE: ['#f77f00', '#111111'], ÖST: ['#5a7d2a', '#ffffff'],
 };
-const GROUP_PAGE = { A: 21878, B: 21879, C: 21880, D: 21881 }; // swehockey group overview pages
+// Boys by default, girls with ?k=f (the Pojkar/Flickor toggle). Each has its own data file, API calls and favourites.
+// id/groups: swehockey series and group overview pages · tv: SvenskHockey.tv competition.
+const K = new URLSearchParams(location.search).get('k') === 'f' ? 'f' : 'p';
+const SERIES = {
+  p: { label: 'Pojkar', id: 21877, groups: { A: 21878, B: 21879, C: 21880, D: 21881 }, tv: '6ad452cbac6ac10a664b9636' },
+  f: { label: 'Flickor', id: 21931, groups: { A: 21932, B: 21933, C: 21934, D: 21935 }, tv: '6ad452cbc5f9185d8d8f769e' },
+}[K];
+const GROUP_PAGE = SERIES.groups;
 const GROUP_COLORS = { A: '#e2132f', B: '#1a56db', C: '#14965a', D: '#d97706', S: '#7c3aed' };
 const POS = { GK: 'MV', LD: 'VB', RD: 'HB', CE: 'C', LW: 'VF', RW: 'HF' };
 const POS_GROUPS = [['Målvakter', ['GK']], ['Backar', ['LD', 'RD']], ['Forwards', ['CE', 'LW', 'RW']]];
@@ -29,10 +36,16 @@ const start = (g) => new Date(`${g.date}T${g.time}`);
 const GAME_MS = 150 * 60 * 1000;
 const inPlay = (g, now = Date.now()) => start(g).getTime() <= now && now < start(g).getTime() + GAME_MS;
 
-const data = await fetch('data.json').then((r) => r.json());
+const data = await fetch(K === 'f' ? 'data-f.json' : 'data.json').then((r) => r.json());
 const teamByName = new Map(data.teams.map((t) => [t.name, t]));
 const teamByCode = new Map(data.teams.map((t) => [t.code, t]));
 const totalPlayers = data.teams.reduce((n, t) => n + t.players.length, 0);
+const years = [...new Set(data.teams.flatMap((t) => t.players.map((p) => p.born)))].sort();
+document.title = `TV-pucken 2026 · ${SERIES.label} – inofficiell fansida`;
+$('#eyebrow').textContent = `${SERIES.label} · distriktslag födda ${years[0]}${years.length > 1 ? `–${years.at(-1)}` : ''}`;
+$('#q').placeholder = `Sök bland ${totalPlayers} spelare eller klubbar`;
+$('#srcLink').href = `https://stats.swehockey.se/ScheduleAndResults/Schedule/${SERIES.id}`;
+for (const a of $$('[data-k]')) if (a.dataset.k === K) a.setAttribute('aria-current', 'page');
 // Stable player id that survives data rebuilds: team code + name.
 const pid = (t, p) => `${t.code}:${p.first} ${p.last}`;
 const playerById = new Map();
@@ -44,7 +57,7 @@ for (const t of data.teams)
   }
 let games = data.games;
 const tvById = new Map(data.games.filter((g) => g.tvId).map((g) => [g.id, g.tvId]));
-const TV_COMP = '6ad452cbac6ac10a664b9636';
+const TV_COMP = SERIES.tv;
 const tvUrl = (g) => {
   const id = g.tvId || tvById.get(g.id);
   return id
@@ -65,7 +78,7 @@ const dates = [...new Set(games.map((g) => g.date))];
 const state = { day: dates.find((d) => d >= today) ?? 'all', group: 'all', team: '', teamTab: 'trupp' };
 
 // ---------- favourites (this device only) ----------
-const FAV_KEY = 'tvp26-favs';
+const FAV_KEY = K === 'f' ? 'tvp26-favs-f' : 'tvp26-favs'; // team codes repeat between boys and girls
 const favs = (() => {
   try {
     const o = JSON.parse(localStorage.getItem(FAV_KEY)) || {};
@@ -816,7 +829,7 @@ $('#team').addEventListener('click', (e) => {
 // `full` also fetches player stats and standings; otherwise only results.
 async function refresh(full = true) {
   const get = (u) => fetch(u).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  const [sched, st, tbl] = await Promise.all([get('/api/schedule'), full ? get('/api/stats') : null, full ? get('/api/standings') : null]);
+  const [sched, st, tbl] = await Promise.all([get(`/api/schedule?k=${K}`), full ? get(`/api/stats?k=${K}`) : null, full ? get(`/api/standings?k=${K}`) : null]);
   if (tbl) official = tbl;
   if (st) {
     stats = {

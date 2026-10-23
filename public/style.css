@@ -93,6 +93,21 @@ button { font: inherit; color: inherit; }
   padding-top: 56px;
   padding-bottom: 56px;
 }
+/* Pojkar / Flickor switch, top right of the hero */
+.kon {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+  z-index: 2;
+  display: flex;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+}
+.kon a { padding: 6px 14px; border-radius: 999px; color: rgba(255, 255, 255, .8); font-size: 13px; font-weight: 700; text-decoration: none; }
+.kon a:hover { color: #fff; }
+.kon a[aria-current] { background: var(--red); color: #fff; }
 .eyebrow {
   margin: 0 0 14px;
   font-size: 13px;
@@ -461,6 +476,8 @@ td.pts { font-weight: 900; font-size: 16px; }
 }
 @media (max-width: 560px) {
   .wrap { padding-left: 16px; padding-right: 16px; }
+  .kon { top: 12px; right: 16px; }
+  .hero-in { padding-top: 60px; } /* room for the switch above the "Inofficiell" pill */
   .stats { gap: 18px; }
   .stats dd { font-size: 22px; }
   .grid { grid-template-columns: 1fr; }

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TV-pucken 2026 · Pojkar – inofficiell fansida</title>
-  <meta name="description" content="Inofficiell fansida. Spelschema, live-resultat, tabeller och trupper för TV-pucken Pojkar 2026, med länk till varje spelare på Elite Prospects.">
+  <meta name="description" content="Inofficiell fansida. Spelschema, live-resultat, tabeller och trupper för TV-pucken 2026, pojkar och flickor, med länk till varje spelare på Elite Prospects.">
   <meta name="theme-color" content="#0a1730">
   <link rel="preload" href="fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
@@ -28,9 +28,10 @@
       <path d="M1060 225a35 35 0 0 0 0 70" class="r-blue r-thin"/>
     </svg>
     <div class="wrap hero-in">
+      <nav class="kon" aria-label="Pojkar eller flickor"><a href="./" data-k="p">Pojkar</a><a href="./?k=f" data-k="f">Flickor</a></nav>
       <div class="hero-text">
         <p class="unofficial">Inofficiell fansida</p>
-        <p class="eyebrow">Pojkar · distriktslag födda 2011</p>
+        <p class="eyebrow" id="eyebrow">Pojkar · distriktslag födda 2011</p>
         <h1>TV-pucken <em>2026</em></h1>
         <p class="status" id="status"></p>
         <dl class="stats" id="stats"></dl>
@@ -116,7 +117,7 @@
   </main>
 
   <footer class="wrap foot">
-    <p><b>Inofficiell fansida</b> – inte kopplad till Svenska Ishockeyförbundet eller distriktsförbunden. Matchdata från <a href="https://stats.swehockey.se/ScheduleAndResults/Schedule/21877">stats.swehockey.se</a> · spelarprofiler och logotyper från <a href="https://www.eliteprospects.com">Elite Prospects</a>.</p>
+    <p><b>Inofficiell fansida</b> – inte kopplad till Svenska Ishockeyförbundet eller distriktsförbunden. Matchdata från <a id="srcLink" href="https://stats.swehockey.se/ScheduleAndResults/Schedule/21877">stats.swehockey.se</a> · spelarprofiler och logotyper från <a href="https://www.eliteprospects.com">Elite Prospects</a>.</p>
     <p class="credit">Made by <b>Mille Weber</b></p>
   </footer>
 
