@@ -171,6 +171,20 @@ h1 em { display: block; font-style: normal; color: transparent; -webkit-text-str
 .dots button[aria-current='true'] { width: 24px; background: #e2132f; }
 .versus .side > span { overflow-wrap: break-word; hyphens: auto; }
 .feature .where { margin: 0; padding-top: 14px; border-top: 1px solid #e4e9f0; font-size: 14px; color: #5a6a82; text-align: center; }
+/* Live game in the featured box: red LIVE pill, big score, period and clock. */
+.feature .label span.live-tag { display: inline-flex; align-items: center; gap: 7px; color: #e2132f; font-weight: 800; letter-spacing: .14em; }
+.live-tag i, .live-pill i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: live-ping 1.4s ease-out infinite; }
+@keyframes live-ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 70%, transparent); } 100% { box-shadow: 0 0 0 7px transparent; } }
+.versus .mid.live { display: grid; justify-items: center; gap: 6px; max-width: 150px; }
+.live-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px 4px 8px; border-radius: 7px; background: #e2132f; color: #fff; font-size: 11px; font-weight: 800; font-stretch: 100%; letter-spacing: .14em; text-transform: uppercase; box-shadow: 0 4px 12px -2px rgb(226 19 47 / .5); }
+.versus .mid.live b { font-size: 44px; font-weight: 900; line-height: 1; letter-spacing: -.01em; }
+.versus .mid.live small { margin: 0; font-size: 13px; font-weight: 700; color: #0a1730; white-space: nowrap; }
+.versus .mid.live .clock { margin-top: -3px; font-size: 16px; font-weight: 800; font-stretch: 100%; color: #e2132f; font-variant-numeric: tabular-nums; }
+.versus .mid.live small.pp { padding: 2px 8px; border-radius: 6px; background: #fff4d6; color: #8a5a00; font-size: 11px; }
+.feature .where .watch { font-weight: 700; color: #e2132f; text-decoration: none; }
+.feature .where .watch:hover { text-decoration: underline; }
+.match-foot .clock { color: var(--red); font-weight: 800; }
+@media (prefers-reduced-motion: reduce) { .live-tag i, .live-pill i { animation: none; } }
 
 /* ---------- Badges ---------- */
 .badge {
@@ -728,3 +742,114 @@ tr.cut td { border-bottom: 2px dashed var(--muted); }
   background: rgba(255, 255, 255, .08);
 }
 .foot b { color: var(--ink); }
+
+/* ---------- Line-ups: a broadcast-style panel with the rink (always dark, like the hero) ---------- */
+.match[data-game] { cursor: pointer; }
+.match-foot a:hover { text-decoration: underline; }
+/* Card actions: line-up and SvenskHockey.tv as two equal buttons. */
+.match-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.match-foot + .match-acts { margin-top: 10px; }
+.act {
+  display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 10px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--soft); color: var(--ink); cursor: pointer;
+  font-size: 13px; font-weight: 700; text-decoration: none; white-space: nowrap;
+  transition: border-color .15s, background .15s, color .15s, transform .1s;
+}
+.act svg { flex: none; width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.act svg circle, .act.tv svg path { fill: currentColor; stroke: none; }
+.act:hover { border-color: var(--blue); color: var(--blue); background: color-mix(in srgb, var(--blue) 8%, var(--card)); }
+.act:active { transform: scale(.97); }
+.act.tv { color: var(--red); border-color: color-mix(in srgb, var(--red) 28%, var(--line)); background: color-mix(in srgb, var(--red) 7%, var(--card)); }
+.act.tv:hover { border-color: var(--red); background: color-mix(in srgb, var(--red) 13%, var(--card)); color: var(--red); }
+.act.tv.live { border-color: var(--red); background: var(--red); color: #fff; letter-spacing: .02em; }
+.act.tv.live:hover { filter: brightness(1.08); }
+.act .pulse { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: act-pulse 1.4s ease-out infinite; }
+@keyframes act-pulse { 0% { box-shadow: 0 0 0 0 rgb(255 255 255 / .8); } 100% { box-shadow: 0 0 0 7px rgb(255 255 255 / 0); } }
+@media (prefers-reduced-motion: reduce) { .act .pulse { animation: none; } }
+
+.lineup {
+  width: min(500px, calc(100% - 20px)); max-height: calc(100dvh - 20px); padding: 16px 16px 12px;
+  overflow: auto; overscroll-behavior: contain;
+  color: #eef2f8; border: 1px solid rgb(255 255 255 / .1); border-radius: 22px;
+  background:
+    radial-gradient(120% 40% at 50% 0%, rgb(226 19 47 / .22), transparent 70%),
+    radial-gradient(90% 50% at 50% 100%, rgb(26 86 219 / .25), transparent 70%),
+    #08132a;
+  box-shadow: 0 30px 80px rgb(0 0 0 / .5);
+}
+.lineup[open] { animation: lu-pop .3s cubic-bezier(.2, .9, .3, 1.15); }
+.lineup::backdrop { background: rgb(4 9 20 / .7); backdrop-filter: blur(4px); }
+@keyframes lu-pop { from { opacity: 0; transform: translateY(16px) scale(.97); } }
+.lu-close {
+  position: absolute; top: 14px; right: 14px; z-index: 3; width: 30px; height: 30px; border-radius: 50%;
+  border: 1px solid rgb(255 255 255 / .14); background: rgb(255 255 255 / .06); color: #fff; font-size: 20px; line-height: 1; cursor: pointer;
+}
+.lu-close:hover { background: rgb(255 255 255 / .14); }
+.lu-eyebrow {
+  margin: 0 44px 14px; overflow: hidden; text-align: center; line-height: 30px; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #8c9ab0;
+}
+.lu-msg { padding: 22px 18px 14px; text-align: center; }
+.lu-msg .lu-eyebrow { margin-bottom: 18px; }
+.lu-vs { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 14px; }
+.lu-vs span { font-size: 13px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #8c9ab0; }
+.lu-msg h2 { margin: 0 0 8px; font-size: 20px; font-weight: 800; font-stretch: 110%; }
+.lu-msg p:last-child { max-width: 34ch; margin: 0 auto; color: #a9b5c8; }
+
+.lu-nav { display: grid; grid-template-columns: 46px 1fr 46px; align-items: center; gap: 8px; }
+.lu-nav button {
+  display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; cursor: pointer;
+  border: 1px solid rgb(255 255 255 / .16); background: rgb(255 255 255 / .07); color: #fff;
+  transition: background .15s, transform .15s;
+}
+.lu-nav button:hover:not(:disabled) { background: var(--red); border-color: var(--red); }
+.lu-nav button:active:not(:disabled) { transform: scale(.92); }
+.lu-nav button:disabled { opacity: .25; cursor: default; }
+.lu-nav svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.lu-nav h2 { display: grid; justify-items: center; margin: 0; font-size: 24px; font-weight: 900; font-stretch: 120%; line-height: 1.05; text-transform: uppercase; letter-spacing: -.005em; }
+.lu-nav h2 small { margin-bottom: 3px; font-size: 11px; font-weight: 800; font-stretch: 100%; letter-spacing: .16em; color: var(--red); }
+.lu-prog { display: flex; justify-content: center; gap: 6px; margin: 12px 0 4px; }
+.lu-prog button { width: 26px; height: 5px; padding: 0; border: 0; border-radius: 3px; background: rgb(255 255 255 / .16); cursor: pointer; transition: width .25s, background .25s; }
+.lu-prog button[aria-current] { width: 44px; background: var(--red); }
+
+.lu-team { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 10px 0; }
+.lu-team b { font-size: 16px; font-weight: 800; font-stretch: 110%; text-transform: uppercase; letter-spacing: .02em; }
+
+/* The rink keeps the SVG's 5:8 shape and shrinks to fit short screens. */
+.lu-rink {
+  position: relative; width: min(100%, calc((100dvh - 290px) * 5 / 8)); min-width: 240px; aspect-ratio: 5 / 8; margin: 0 auto;
+  touch-action: pan-y; user-select: none; -webkit-user-select: none; container-type: inline-size;
+}
+.lu-ice { position: absolute; inset: 0; width: 100%; height: 100%; filter: drop-shadow(0 14px 30px rgb(0 0 0 / .5)); }
+.lu-p { position: absolute; z-index: 1; display: grid; justify-items: center; width: 34%; transform: translate(-50%, -35%); color: #0a1730; }
+.lu-p:not(.g) { animation: lu-in .4s cubic-bezier(.2, .8, .2, 1) var(--d) both; }
+@keyframes lu-in { from { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), -35%) scale(.85); } }
+.lu-p.home { --c1: #2f6df0; --c2: #1440a8; }
+.lu-p.away { --c1: #f2394f; --c2: #b30d22; }
+.lu-no {
+  display: grid; place-items: center; width: clamp(30px, 12.5cqw, 40px); aspect-ratio: 1; border-radius: 50%;
+  background: linear-gradient(160deg, var(--c1), var(--c2)); border: 2.5px solid #fff; box-shadow: 0 3px 8px rgb(10 23 48 / .35);
+  color: #fff; font-size: clamp(12px, 5cqw, 16px); font-weight: 900; font-stretch: 115%; letter-spacing: -.02em;
+}
+.lu-p.g .lu-no { width: clamp(33px, 14cqw, 44px); border-radius: 30%; }
+.lu-side { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px; border-radius: 999px; background: rgb(255 255 255 / .08); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #a9b5c8; }
+.lu-side::before { content: ''; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid #fff; }
+.lu-side.home::before { background: #2f6df0; }
+.lu-side.away::before { background: #f2394f; }
+.lu-shirt { position: relative; display: grid; place-items: center; width: clamp(32px, 14cqw, 46px); aspect-ratio: 60 / 56; filter: drop-shadow(0 3px 4px rgb(10 23 48 / .35)); }
+.lu-shirt svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lu-shirt b { position: relative; margin-top: 12%; font-size: clamp(12px, 5.2cqw, 17px); font-weight: 900; font-stretch: 115%; color: var(--t); letter-spacing: -.02em; }
+.lu-p.g .lu-shirt { width: clamp(35px, 15.2cqw, 50px); }
+.lu-side.kit { gap: 4px; padding-left: 4px; }
+.lu-side.kit::before { content: none; }
+.lu-side svg { width: 20px; height: 19px; }
+.lu-nm {
+  max-width: 100%; margin-top: 1px; padding: 2px 8px; border-radius: 999px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: #0a1730; color: #fff; box-shadow: 0 2px 6px rgb(10 23 48 / .3);
+  font-size: clamp(9px, 3.4cqw, 11px); font-weight: 800; font-stretch: 90%; letter-spacing: .03em; text-transform: uppercase; line-height: 1.35;
+}
+.lu-nm small { font-size: inherit; font-weight: 500; opacity: .7; }
+.lu-nm i { margin-right: 5px; padding: 0 4px; border-radius: 4px; background: var(--red); font-style: normal; font-size: 9px; letter-spacing: .06em; vertical-align: 1px; }
+.lu-src { margin: 10px 0 0; text-align: center; font-size: 11px; color: #8c9ab0; }
+.lu-src a { font-weight: 700; color: #9db8ff; text-decoration: none; }
+@media (prefers-reduced-motion: reduce) { .lineup[open], .lu-p:not(.g) { animation: none; } }

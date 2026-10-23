@@ -35,6 +35,26 @@ const noon = (d) => new Date(`${d}T12:00`);
 const start = (g) => new Date(`${g.date}T${g.time}`);
 const GAME_MS = 150 * 60 * 1000;
 const inPlay = (g, now = Date.now()) => start(g).getTime() <= now && now < start(g).getTime() + GAME_MS;
+// g.live comes from swehockey's Live page (via /api/schedule) for today's games; without it, fall back to the time window.
+const isLive = (g, now = Date.now()) =>
+  start(g).getTime() <= now && (g.live ? !/final|finished/i.test(g.live.status) : inPlay(g, now) && !(g.periods?.split(',').length >= 3));
+const nth = (n) => ['1:a', '2:a', '3:e'][n - 1] || `${n}:e`;
+// Swehockey's status line in Swedish: { what: "2:a perioden", clock: "14:32", pp: "Powerplay 5 mot 4 · NOR" }.
+function liveInfo(g) {
+  const s = g.live?.status || '';
+  const n = g.periods?.split(',').length || 1;
+  const num = (re) => +(s.match(re) || [])[1];
+  let what;
+  if (!g.live) what = 'Pågår';
+  else if (/waiting for overtime/i.test(s)) what = 'Paus inför förlängning';
+  else if (/overtime/i.test(s) || (n > 3 && !/period/i.test(s))) what = 'Förlängning';
+  else if (/shoot|penalty shot/i.test(s)) what = 'Straffläggning';
+  else if (/waiting for \d/i.test(s)) what = `Paus inför ${nth(num(/waiting for (\d)/i))} perioden`;
+  else if (/period ended/i.test(s)) what = `${nth(num(/(\d)\w* period/i))} perioden slut`;
+  else what = `${nth(num(/(\d)\w* period/i) || n)} perioden`;
+  const pp = s.match(/Powerplay \((\d) on (\d)\) for (.+)/i);
+  return { what, clock: g.live?.clock || null, pp: pp ? `Powerplay ${pp[1]} mot ${pp[2]} · ${pp[3]}` : '' };
+}
 
 const data = await fetch(K === 'f' ? 'data-f.json' : 'data.json').then((r) => r.json());
 const teamByName = new Map(data.teams.map((t) => [t.name, t]));
@@ -136,16 +156,30 @@ function matchCard(g, isNext, favNames = favTeamNames()) {
   const when = played
     ? ''
     : `<div class="when">${isNext ? '<span class="next-tag">Nästa</span>' : ''}<b>${esc(g.time)}</b><span>${dayShort.format(noon(g.date))}</span></div>`;
-  const status = periods > 3 ? 'Slut · förl.' : periods === 3 ? 'Slut' : 'Pågår';
-  const tvLink = `<a href="${esc(tvUrl(g))}" target="_blank" rel="noopener">SvenskHockey.tv ↗</a>`;
-  const foot = played
-    ? `<div class="match-foot">
-        <span><span class="state${status === 'Pågår' ? ' live' : ''}">${status}</span>${g.periods ? ` · ${esc(g.periods)}` : ''}</span>
-        <span>${g.eventsUrl ? `<a href="https://stats.swehockey.se${esc(g.eventsUrl)}" target="_blank" rel="noopener">Matchrapport ↗</a> · ` : ''}${tvLink}</span>
+  const live = isLive(g);
+  const info = live && liveInfo(g);
+  const status = live ? 'Live' : periods > 3 ? 'Slut · förl.' : periods === 3 || g.live ? 'Slut' : 'Pågår';
+  const foot = `
+    ${
+      played
+        ? `<div class="match-foot">
+        <span><span class="state${live ? ' live' : ''}">${status}</span>${
+          live ? ` · ${info.what}${info.clock ? ` · <b class="clock">${esc(info.clock)}</b>` : ''}` : g.periods ? ` · ${esc(g.periods)}` : ''
+        }</span>
+        ${g.eventsUrl ? `<a href="https://stats.swehockey.se${esc(g.eventsUrl)}" target="_blank" rel="noopener">Matchrapport ↗</a>` : ''}
       </div>`
-    : `<div class="match-foot">${tvLink}</div>`;
+        : ''
+    }
+    <div class="match-acts">
+      <button type="button" class="act" data-lineup="${esc(g.id)}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 3.5c1 1.6 6 1.6 7 0l4.5 2.2 2 5.1-3.2 1.3-1.3-2.1V20.5H6.5V10l-1.3 2.1L2 10.8l2-5.1z"/></svg>Laguppställning
+      </button>
+      <a class="act tv${live ? ' live' : ''}" href="${esc(tvUrl(g))}" target="_blank" rel="noopener">
+        ${live ? '<span class="pulse" aria-hidden="true"></span>Se live' : '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M10 9.2v5.6l4.8-2.8z"/></svg>SvenskHockey.tv'}
+      </a>
+    </div>`;
   return `
-    <article class="match${played ? ' played' : ''}${isNext ? ' next' : ''}${fav ? ' fav' : ''}" style="--g:${GROUP_COLORS[L]}">
+    <article class="match${played ? ' played' : ''}${isNext ? ' next' : ''}${fav ? ' fav' : ''}" data-game="${esc(g.id)}" style="--g:${GROUP_COLORS[L]}">
       <div class="match-top"><span class="grp">${groupName(L)}</span><span class="venue">${esc(g.venue)}</span></div>
       <div class="match-body"><div class="teams">${row(g.home, g.hs, g.as)}${row(g.away, g.as, g.hs)}</div>${when}</div>
       ${foot}
@@ -216,15 +250,16 @@ function renderHero() {
   const first = start(games[0]).getTime();
   const final = games.at(-1);
   const next = nextGame(now);
-  const live = games.some((g) => inPlay(g, now) && !(g.periods?.split(',').length >= 3));
+  const liveGames = games.filter((g) => isLive(g, now));
+  const live = liveGames.length > 0;
 
   let status;
-  if (now < first) {
+  if (live) status = `<span class="dot live"></span><b>Match pågår</b>`;
+  else if (now < first) {
     const h = Math.floor((first - now) / 36e5);
     const left = h >= 24 ? `${Math.floor(h / 24)} d ${h % 24} h` : `${h} h ${Math.floor(((first - now) % 36e5) / 6e4)} min`;
     status = `<span class="dot"></span>Nedsläpp om <b>${left}</b>`;
-  } else if (live) status = `<span class="dot live"></span><b>Match pågår</b>`;
-  else if (next) status = `<span class="dot"></span>Pågår · nästa match <b>${dayShort.format(noon(next.date))} ${esc(next.time)}</b>`;
+  } else if (next) status = `<span class="dot"></span>Pågår · nästa match <b>${dayShort.format(noon(next.date))} ${esc(next.time)}</b>`;
   else status = `<span class="dot"></span><b>Turneringen är avgjord</b>`;
   $('#status').innerHTML = status;
 
@@ -236,26 +271,43 @@ function renderHero() {
   ];
   $('#stats').innerHTML = facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('');
 
-  // Every game in the next time slot gets a slide (several districts face off at the same time).
-  // Games involving a followed team come first.
+  // Games being played right now get the slides; otherwise every game in the next time slot
+  // (several districts face off at the same time). Games involving a followed team come first.
   const favNames = favTeamNames();
-  const slides = next
-    ? games.filter((x) => x.date === next.date && x.time === next.time).sort((a, b) => isFavGame(b, favNames) - isFavGame(a, favNames))
-    : [final];
+  const slides = (
+    live ? liveGames : next ? games.filter((x) => x.date === next.date && x.time === next.time) : [final]
+  ).sort((a, b) => isFavGame(b, favNames) - isFavGame(a, favNames));
   const started = next && start(next).getTime() <= now;
-  const label = !next ? 'Final' : started ? 'Pågår nu' : slides.length > 1 ? 'Nästa matcher' : 'Nästa match';
+  const label = live
+    ? '<span class="live-tag"><i></i>Live</span>'
+    : !next ? 'Final' : started ? 'Pågår nu' : slides.length > 1 ? 'Nästa matcher' : 'Nästa match';
   const side = (name) =>
     teamByName.has(name)
       ? `<a class="side" href="${teamHref(name)}">${badge(name, 'lg')}<span>${esc(name)}</span></a>`
       : `<span class="side">${badge(name, 'lg')}<span>${esc(name)}</span></span>`;
+  const liveMid = (g) => {
+    const i = liveInfo(g);
+    return `<div class="mid live">
+      <span class="live-pill"><i></i>Live</span>
+      <b>${g.hs ?? 0}–${g.as ?? 0}</b>
+      <small>${i.what}</small>${i.clock ? `<span class="clock">${esc(i.clock)}</span>` : ''}
+      ${i.pp ? `<small class="pp">${esc(i.pp)}</small>` : ''}
+    </div>`;
+  };
   const slide = (g) => `
     <div class="slide">
       <div class="versus">
         ${side(g.home)}
-        <div class="mid">${g.hs != null ? `${g.hs}–${g.as}` : esc(g.time)}<small>${dayShort.format(noon(g.date))}</small></div>
+        ${
+          isLive(g, now)
+            ? liveMid(g)
+            : `<div class="mid">${g.hs != null ? `${g.hs}–${g.as}` : esc(g.time)}<small>${dayShort.format(noon(g.date))}</small></div>`
+        }
         ${side(g.away)}
       </div>
-      <p class="where"><b style="color:${GROUP_COLORS[letterOf(g)]}">${groupName(letterOf(g))}</b> · ${esc(g.venue)}</p>
+      <p class="where"><b style="color:${GROUP_COLORS[letterOf(g)]}">${groupName(letterOf(g))}</b> · ${esc(g.venue)}${
+        isLive(g, now) ? ` · <a class="watch" href="${esc(tvUrl(g))}" target="_blank" rel="noopener">Se live ↗</a>` : ''
+      }</p>
     </div>`;
   const keep = carouselIndex();
   $('#feature').innerHTML = `
@@ -718,6 +770,163 @@ document.addEventListener('click', (e) => {
   } else renderAllStats();
   if (!$('[data-view="favoriter"]').hidden) renderFavs();
 });
+
+// ---------- line-ups on a rink (swehockey posts them about an hour before face-off) ----------
+const ORD = ['Första', 'Andra', 'Tredje', 'Fjärde', 'Femte', 'Sjätte'];
+// Spots in % of the rink for the home team (bottom half, attacking up): G, [LD, RD], [LW, C, RW].
+// The away team (top half, attacking down) gets the same spots turned 180°, so their left wing is on our right.
+const SPOTS = { g: [50, 90], d: [[31, 77], [69, 77]], f: [[19, 61], [50, 58.5], [81, 61]] };
+// Swehockey's jersey colour per team and game ("Östergötland (Red)"). Unknown or missing: plain home/away tokens.
+const JERSEY = {
+  white: '#f7f9fc', black: '#16181d', red: '#d4152b', blue: '#1a56db', 'dark blue': '#14306b', navy: '#14306b',
+  'light blue': '#4ba3e3', green: '#12804a', yellow: '#f6c90e', orange: '#f77f00', purple: '#5b2a86', grey: '#7a8699', gray: '#7a8699',
+};
+const inkOn = (hex) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b > 160 ? '#0a1730' : '#ffffff';
+};
+const kitOf = (t) => {
+  const c = JERSEY[t.color?.trim().toLowerCase()];
+  return c ? `--c:${c};--t:${inkOn(c)}` : '';
+};
+const SHIRT = '<svg viewBox="0 0 60 56" aria-hidden="true"><use href="#lu-jersey"/></svg>';
+const RINK = `<svg class="lu-ice" viewBox="0 0 200 320" aria-hidden="true">
+  <defs>
+    <symbol id="lu-jersey" viewBox="0 0 60 56">
+      <path d="M19 3c3 4 19 4 22 0l12 6 6 15-9 4-3-6v31H13V22l-3 6-9-4 6-15z" style="fill:var(--c)" stroke="rgba(10,23,48,.45)" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M3 20l8 4M57 20l-8 4M13 47h34" style="stroke:var(--t)" stroke-width="3" opacity=".85"/>
+      <path d="M23 5q7 6 14 0" fill="none" style="stroke:var(--t)" stroke-width="2.2" opacity=".85"/>
+    </symbol>
+    <radialGradient id="lu-iceg" cx="50%" cy="50%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#dfe8f3"/></radialGradient>
+    <pattern id="lu-net" width="3" height="3" patternUnits="userSpaceOnUse"><path d="M0 0L3 3M3 0L0 3" stroke="#9aa9bd" stroke-width=".4"/></pattern>
+  </defs>
+  <rect x="2" y="2" width="196" height="316" rx="58" fill="url(#lu-iceg)" stroke="#c4d1e2" stroke-width="4"/>
+  <path d="M10 26H190M10 294H190" stroke="#e2132f" stroke-width="1.6" opacity=".8"/>
+  <path d="M2 116H198M2 204H198" stroke="#1f5fd6" stroke-width="5" opacity=".85"/>
+  <path d="M2 160H198" stroke="#e2132f" stroke-width="4" opacity=".85"/>
+  <circle cx="100" cy="160" r="28" fill="none" stroke="#1f5fd6" stroke-width="1.4"/>
+  <circle cx="100" cy="160" r="3" fill="#1f5fd6"/>
+  <g fill="#e2132f"><circle cx="52" cy="130" r="2.6"/><circle cx="148" cy="130" r="2.6"/><circle cx="52" cy="190" r="2.6"/><circle cx="148" cy="190" r="2.6"/>
+    <circle cx="52" cy="62" r="2.6"/><circle cx="148" cy="62" r="2.6"/><circle cx="52" cy="258" r="2.6"/><circle cx="148" cy="258" r="2.6"/></g>
+  <g fill="none" stroke="#e2132f" stroke-width="1.4" opacity=".85">
+    <circle cx="52" cy="62" r="22"/><circle cx="148" cy="62" r="22"/><circle cx="52" cy="258" r="22"/><circle cx="148" cy="258" r="22"/>
+    <path d="M30 58h-4M30 66h-4M74 58h4M74 66h4M126 58h-4M126 66h-4M170 58h4M170 66h4M30 254h-4M30 262h-4M74 254h4M74 262h4M126 254h-4M126 262h-4M170 254h4M170 262h4"/>
+  </g>
+  <path d="M88 26a12 12 0 0 0 24 0z" fill="#bfe0ff" stroke="#e2132f" stroke-width="1.2"/>
+  <path d="M88 294a12 12 0 0 1 24 0z" fill="#bfe0ff" stroke="#e2132f" stroke-width="1.2"/>
+  <path d="M92 26v-5q0-3 3-3h10q3 0 3 3v5z" fill="url(#lu-net)" stroke="#e2132f" stroke-width="2"/>
+  <path d="M92 294v5q0 3 3 3h10q3 0 3-3v-5z" fill="url(#lu-net)" stroke="#e2132f" stroke-width="2"/>
+</svg>`;
+const lu = { g: null, id: null, teams: null, i: 0 };
+
+// A jersey in the team's colour for this game, or a plain token in the site's colours (home blue, away red).
+function luSpot(p, [x, y], away, kit, k, goalie = false) {
+  if (!p) return '';
+  const [l, top] = away ? [100 - x, 100 - y] : [x, y];
+  return `<div class="lu-p ${away ? 'away' : 'home'}${goalie ? ' g' : ''}" style="left:${l}%;top:${top}%;--d:${k * 35}ms;${kit}">
+    ${kit ? `<span class="lu-shirt">${SHIRT}<b>${p.no ?? ''}</b></span>` : `<span class="lu-no">${p.no ?? ''}</span>`}
+    <span class="lu-nm">${goalie ? '<i>MV</i>' : ''}${p.first ? `<small>${esc(p.first[0])}.</small> ` : ''}${esc(p.last)}</span>
+  </div>`;
+}
+function luTeamBar(t, side) {
+  const crest = teamByName.has(t.name) ? badge(t.name) : '';
+  return `<div class="lu-team ${side}">
+    ${crest}<b>${esc(t.name)}</b>
+    <span class="lu-side ${side}${kitOf(t) ? ' kit' : ''}" style="${kitOf(t)}">${kitOf(t) ? SHIRT : ''}${side === 'away' ? 'Borta' : 'Hemma'}</span>
+  </div>`;
+}
+function renderLineup(dir = 0) {
+  const dlg = $('#lineup');
+  const blank = { name: '', goalies: [], lines: [] };
+  const [home = blank, away = blank] = lu.teams;
+  const n = Math.max(home.lines.length, away.lines.length);
+  const i = lu.i;
+  const players = (t, away) => {
+    const l = t.lines[i];
+    const g = t.goalies.find((p) => p.start) || t.goalies[0];
+    const skaters = l ? [...l.d.map((p, k) => [p, SPOTS.d[k]]), ...l.f.map((p, k) => [p, SPOTS.f[k]])] : [];
+    const kit = kitOf(t);
+    return luSpot(g, SPOTS.g, away, kit, 0, true) + skaters.map(([p, s], k) => luSpot(p, s, away, kit, k)).join('');
+  };
+  const focused = document.activeElement?.dataset?.step;
+  dlg.innerHTML = `
+    <button type="button" class="lu-close" aria-label="Stäng">×</button>
+    <header class="lu-top">
+      <p class="lu-eyebrow">Laguppställning</p>
+      <div class="lu-nav">
+        <button type="button" data-step="-1" aria-label="Föregående femma"${i === 0 ? ' disabled' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <h2 aria-live="polite"><small>${i + 1} / ${n}</small>${ORD[i] ? `${ORD[i]} femman` : `Femma ${i + 1}`}</h2>
+        <button type="button" data-step="1" aria-label="Nästa femma"${i >= n - 1 ? ' disabled' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+      </div>
+      <div class="lu-prog">${Array.from({ length: n }, (_, k) => `<button type="button" data-goto="${k}" aria-label="${ORD[k] || k + 1} femman"${k === i ? ' aria-current="true"' : ''}></button>`).join('')}</div>
+    </header>
+    ${luTeamBar(away, 'away')}
+    <div class="lu-rink" style="--dx:${dir * 28}px">${RINK}${players(away, true)}${players(home, false)}</div>
+    ${luTeamBar(home, 'home')}
+    <p class="lu-src">Svep eller använd pilarna för att byta femma · Källa: <a href="https://stats.swehockey.se/Game/LineUps/${esc(lu.id)}" target="_blank" rel="noopener">swehockey ↗</a></p>`;
+  if (focused) dlg.querySelector(`[data-step="${focused}"]:not(:disabled)`)?.focus();
+}
+function goLine(i) {
+  if (!lu.teams) return;
+  const n = Math.max(...lu.teams.map((t) => t.lines.length));
+  i = Math.min(n - 1, Math.max(0, i));
+  if (i === lu.i) return;
+  const dir = Math.sign(i - lu.i);
+  lu.i = i;
+  renderLineup(dir);
+}
+function lineupMessage(msg) {
+  const g = lu.g;
+  $('#lineup').innerHTML = `<button type="button" class="lu-close" aria-label="Stäng">×</button>
+    <div class="lu-msg">
+      <p class="lu-eyebrow">Laguppställning</p>
+      <div class="lu-vs">${badge(g.home, 'lg')}<span>vs</span>${badge(g.away, 'lg')}</div>
+      <h2>${esc(g.home)} – ${esc(g.away)}</h2>
+      <p>${msg}</p>
+    </div>`;
+}
+async function openLineup(g) {
+  const dlg = $('#lineup');
+  Object.assign(lu, { g, id: null, teams: null, i: 0 });
+  lineupMessage('Hämtar laguppställning…');
+  if (!dlg.open) dlg.showModal();
+  const qs = new URLSearchParams({ k: K, id: g.gameId || g.eventsUrl?.match(/\d+$/)?.[0] || '', home: g.home, away: g.away });
+  const r = await fetch(`/api/lineup?${qs}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+  if (!dlg.open || lu.g !== g) return; // closed, or another game opened meanwhile
+  if (!r) return lineupMessage('Kunde inte hämta laguppställningen just nu. Försök igen om en stund.');
+  if (!r.teams.length)
+    return lineupMessage('Laguppställningen är inte publicerad än. Den brukar läggas upp på swehockey ungefär en timme före nedsläpp.');
+  Object.assign(lu, { id: r.id, teams: r.teams });
+  renderLineup();
+}
+// Click anywhere on a match card (except its links and buttons) or its "Laguppställning" button.
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-lineup]') || (!e.target.closest('a,button') && e.target.closest('.match[data-game]'));
+  const g = el && games.find((x) => x.id === (el.dataset.lineup || el.dataset.game));
+  if (g) openLineup(g);
+});
+{
+  const dlg = $('#lineup');
+  dlg.addEventListener('click', (e) => {
+    if (e.target === dlg || e.target.closest('.lu-close')) return dlg.close(); // backdrop or ×
+    const b = e.target.closest('[data-step],[data-goto]');
+    if (b) goLine(b.dataset.goto != null ? +b.dataset.goto : lu.i + +b.dataset.step);
+  });
+  dlg.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') goLine(lu.i + (e.key === 'ArrowLeft' ? -1 : 1));
+  });
+  // Swipe left/right to change line.
+  let x0 = null;
+  let y0 = 0;
+  dlg.addEventListener('touchstart', (e) => ([x0, y0] = [e.touches[0].clientX, e.touches[0].clientY]), { passive: true });
+  dlg.addEventListener('touchend', (e) => {
+    if (x0 == null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    const dy = e.changedTouches[0].clientY - y0;
+    x0 = null;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) goLine(lu.i + (dx < 0 ? 1 : -1));
+  });
+}
 
 // ---------- routing ----------
 const VIEWS = ['matcher', 'tabeller', 'lag', 'favoriter'];
