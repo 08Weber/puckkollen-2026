@@ -170,7 +170,10 @@ function matchCard(g, isNext, favNames = favTeamNames()) {
       </div>`
         : ''
     }
-    <div class="match-acts">
+    <div class="match-acts${played ? ' three' : ''}">
+      ${played ? `<button type="button" class="act" data-events="${esc(g.id)}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1.4"/><circle cx="4" cy="12" r="1.4"/><circle cx="4" cy="18" r="1.4"/></svg>Händelser
+      </button>` : ''}
       <button type="button" class="act" data-lineup="${esc(g.id)}">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 3.5c1 1.6 6 1.6 7 0l4.5 2.2 2 5.1-3.2 1.3-1.3-2.1V20.5H6.5V10l-1.3 2.1L2 10.8l2-5.1z"/></svg>Laguppställning
       </button>
@@ -898,6 +901,9 @@ function lineupMessage(msg) {
 }
 async function openLineup(g) {
   const dlg = $('#lineup');
+  evs.id = null; // the dialog is shared with the event list
+  clearInterval(evs.timer);
+  dlg.setAttribute('aria-label', 'Laguppställning');
   Object.assign(lu, { g, id: null, teams: null, i: 0 });
   lineupMessage('Hämtar laguppställning…');
   if (!dlg.open) dlg.showModal();
@@ -910,6 +916,113 @@ async function openLineup(g) {
   Object.assign(lu, { id: r.id, teams: r.teams });
   renderLineup();
 }
+// All events of a game in the line-up dialog: goals, penalties, goalie changes, shootout. Refreshed every 20 s while live.
+const evs = { id: null, data: null, timer: 0 };
+const EV_SIT = { PP: 'Powerplay', SH: 'Boxplay', EN: 'Tom kasse', PS: 'Straffslag' };
+const EV_REASON = {
+  tripping: 'Fällning', hooking: 'Hakning', holding: 'Fasthållning', 'holding the stick': 'Hålla klubban', interference: 'Obstruktion',
+  'high sticking': 'Hög klubba', roughing: 'Ruffighet', crosschecking: 'Crosschecking', 'cross-checking': 'Crosschecking', slashing: 'Slag',
+  'delay of game': 'Fördröjning av spelet', kneeing: 'Knästick', boarding: 'Tackling mot sargen', 'too many players on the ice': 'För många spelare på isen',
+  'checking from behind': 'Tackling bakifrån', 'unsportsmanlike conduct': 'Osportsligt uppträdande', elbowing: 'Armbåge', charging: 'Charging',
+  spearing: 'Spjutning', 'butt-ending': 'Klubbände', 'illegal hit to the head': 'Otillåten tackling mot huvudet', 'head contact': 'Huvudtackling',
+  'misconduct': 'Personligt straff', 'game misconduct': 'Matchstraff', 'match penalty': 'Matchstraff', diving: 'Filmning', 'abuse of officials': 'Protest mot domare',
+};
+const evPeriod = (n) =>
+  /^\d/.test(n) ? `${nth(+n[0])} perioden` : /^overtime/i.test(n) ? 'Förlängning' : /shots$/i.test(n) ? 'Straffläggning' : /winning shot/i.test(n) ? 'Avgörande straff' : n;
+const evNote = (s = '') =>
+  EV_REASON[s.toLowerCase()] ||
+  s.replace(/^PenaltyShot$/i, 'Straffslag utdömt').replace(/Missed Penalty Shot/i, 'Missat straffslag').replace(/Saved By/i, '· räddat av');
+function evWho(team, p) {
+  if (!p) return '';
+  if (!p.first) return esc(/team penalty/i.test(p.last) ? 'Lagstraff' : /timeout/i.test(p.last) ? '' : p.last);
+  return `<a class="ev-p" href="${esc(epUrl(luRoster(team, p)))}" target="_blank" rel="noopener">${p.no != null ? `<small>${p.no}</small>` : ''}${esc(`${p.first} ${p.last}`)}</a>`;
+}
+function renderEvents() {
+  const dlg = $('#lineup');
+  const g = games.find((x) => x.id === evs.id) || lu.g;
+  const periods = evs.data?.periods || [];
+  // Swehockey's team codes -> home/away; a code we don't know gets whichever side is left.
+  const side = new Map();
+  const codes = [...new Set(periods.flatMap((p) => p.events.map((e) => e.team)))];
+  for (const c of codes) {
+    const n = teamByCode.get(c)?.name;
+    if (n === g.home || n === g.away) side.set(c, n);
+  }
+  for (const c of codes) if (!side.has(c)) side.set(c, [g.home, g.away].find((n) => ![...side.values()].includes(n)) || c);
+  const live = isLive(g);
+  const info = live && liveInfo(g);
+  const status = live ? `<span class="state live">Live</span> · ${info.what}${info.clock ? ` · <b class="clock">${esc(info.clock)}</b>` : ''}` : g.hs != null ? 'Slut' : '';
+  const item = (e) => {
+    const team = side.get(e.team) || e.team;
+    const who = evWho(team, e.player);
+    let tag, main = who, sub = '';
+    if (e.kind === 'goal') {
+      tag = `Mål ${e.score[0]}–${e.score[1]}`;
+      main = who + (e.total ? ` <span class="ev-n">(${e.total})</span>` : '');
+      const sit = e.sit.split(/[\s,]+/).map((s) => EV_SIT[s.replace(/\d+$/, '')]).filter(Boolean);
+      sub = [e.assists.length ? `Assist: ${e.assists.map((a) => evWho(team, a)).join(', ')}` : '', ...sit.map((s) => `<span class="ev-sit">${s}</span>`)].filter(Boolean).join(' ');
+    } else if (e.kind === 'so') {
+      tag = e.scored ? 'Mål' : 'Miss';
+      sub = e.goalie ? `mot ${evWho(side.get(e.team) === g.home ? g.away : g.home, e.goalie)}` : '';
+    } else if (e.kind === 'pen') {
+      tag = e.what;
+      sub = esc(evNote(e.note));
+    } else if (e.kind === 'gk') {
+      tag = /out/i.test(e.what) ? 'MV ut' : 'MV in';
+    } else {
+      tag = { TO: 'Timeout', PS: 'Straffslag' }[e.what] || e.what || 'Straff';
+      sub = esc(evNote(e.note));
+    }
+    return `<li class="ev ${e.kind}${e.kind === 'so' && e.scored ? ' scored' : ''} ${team === g.away ? 'away' : 'home'}">
+      <span class="ev-t">${esc(e.time)}</span>${badge(team)}
+      <div class="ev-b"><div class="ev-h"><span class="ev-tag">${esc(tag)}</span>${main}</div>${sub ? `<div class="ev-s">${sub}</div>` : ''}</div>
+    </li>`;
+  };
+  const top = dlg.scrollTop;
+  dlg.innerHTML = `<button type="button" class="lu-close" aria-label="Stäng">×</button>
+    <header class="ev-top">
+      <p class="lu-eyebrow">Händelser</p>
+      <div class="ev-score">
+        <div>${badge(g.home, 'lg')}<span>${esc(g.home)}</span></div>
+        <div class="ev-res"><b>${g.hs ?? 0}–${g.as ?? 0}</b><small>${status}</small></div>
+        <div>${badge(g.away, 'lg')}<span>${esc(g.away)}</span></div>
+      </div>
+    </header>
+    ${
+      periods.length
+        ? periods.map((p) => `<h3 class="ev-per">${esc(evPeriod(p.name))}</h3><ol class="ev-list">${p.events.map(item).join('')}</ol>`).join('')
+        : `<p class="ev-empty">${evs.data ? 'Inga händelser än.' : 'Hämtar händelser…'}</p>`
+    }
+    ${evs.data?.id ? `<p class="lu-src">Senaste överst${live ? ' · uppdateras automatiskt' : ''} · Källa: <a href="https://stats.swehockey.se/Game/Events/${esc(evs.data.id)}" target="_blank" rel="noopener">swehockey ↗</a></p>` : ''}`;
+  dlg.scrollTop = top;
+}
+async function loadEvents(g) {
+  const qs = new URLSearchParams({ k: K, id: g.gameId || g.eventsUrl?.match(/\d+$/)?.[0] || '', home: g.home, away: g.away });
+  const r = await fetch(`/api/events?${qs}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+  if (!$('#lineup').open || evs.id !== g.id) return; // closed, or something else opened meanwhile
+  if (r) evs.data = r;
+  else if (!evs.data) return lineupMessage('Kunde inte hämta händelserna just nu. Försök igen om en stund.');
+  renderEvents();
+}
+function openEvents(g) {
+  const dlg = $('#lineup');
+  clearInterval(evs.timer);
+  Object.assign(lu, { g, id: null, teams: null, i: 0 }); // no line-up: swipes and arrow keys do nothing
+  Object.assign(evs, { id: g.id, data: null });
+  dlg.setAttribute('aria-label', 'Händelser');
+  renderEvents();
+  if (!dlg.open) dlg.showModal();
+  loadEvents(g);
+  evs.timer = setInterval(() => {
+    const cur = games.find((x) => x.id === evs.id);
+    if (cur && isLive(cur)) loadEvents(cur);
+  }, 20000);
+}
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-events]');
+  const g = el && games.find((x) => x.id === el.dataset.events);
+  if (g) openEvents(g);
+});
 // Click anywhere on a match card (except its links and buttons) or its "Laguppställning" button.
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-lineup]') || (!e.target.closest('a,button') && e.target.closest('.match[data-game]'));
@@ -922,6 +1035,10 @@ document.addEventListener('click', (e) => {
     if (e.target === dlg || e.target.closest('.lu-close')) return dlg.close(); // backdrop or ×
     const b = e.target.closest('[data-step],[data-goto]');
     if (b) goLine(b.dataset.goto != null ? +b.dataset.goto : lu.i + +b.dataset.step);
+  });
+  dlg.addEventListener('close', () => {
+    clearInterval(evs.timer);
+    evs.id = null;
   });
   dlg.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') goLine(lu.i + (e.key === 'ArrowLeft' ? -1 : 1));
