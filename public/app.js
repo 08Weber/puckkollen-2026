@@ -822,13 +822,22 @@ const RINK = `<svg class="lu-ice" viewBox="0 0 200 320" aria-hidden="true">
 const lu = { g: null, id: null, teams: null, i: 0 };
 
 // A jersey in the team's colour for this game, or a plain token in the site's colours (home blue, away red).
-function luSpot(p, [x, y], away, kit, k, goalie = false) {
+// Roster entry for a line-up player (same "Last, First" names as the stats; number + surname as a fallback) for the EP link.
+// No match: the line-up entry itself, which epUrl turns into an EP name search.
+function luRoster(team, p) {
+  const hit = playerByStatKey.get(`${team}|${p.last}, ${p.first}`);
+  if (hit) return hit[1];
+  return teamByName.get(team)?.players.find((r) => p.no != null && r.no === p.no && r.last === p.last) || p;
+}
+function luSpot(team, p, [x, y], away, kit, k, goalie = false) {
   if (!p) return '';
   const [l, top] = away ? [100 - x, 100 - y] : [x, y];
-  return `<div class="lu-p ${away ? 'away' : 'home'}${goalie ? ' g' : ''}" style="left:${l}%;top:${top}%;--d:${k * 35}ms;${kit}">
+  const r = luRoster(team, p);
+  return `<a class="lu-p ${away ? 'away' : 'home'}${goalie ? ' g' : ''}" style="left:${l}%;top:${top}%;--d:${k * 35}ms;${kit}"
+    href="${esc(epUrl(r))}" target="_blank" rel="noopener" title="${esc(`${p.first} ${p.last}`.trim())} – ${r.ep ? 'Elite Prospects' : 'sök på Elite Prospects'}">
     ${kit ? `<span class="lu-shirt">${SHIRT}<b>${p.no ?? ''}</b></span>` : `<span class="lu-no">${p.no ?? ''}</span>`}
     <span class="lu-nm">${goalie ? '<i>MV</i>' : ''}${p.first ? `<small>${esc(p.first[0])}.</small> ` : ''}${esc(p.last)}</span>
-  </div>`;
+  </a>`;
 }
 function luTeamBar(t, side) {
   const crest = teamByName.has(t.name) ? badge(t.name) : '';
@@ -848,7 +857,7 @@ function renderLineup(dir = 0) {
     const g = t.goalies.find((p) => p.start) || t.goalies[0];
     const skaters = l ? [...l.d.map((p, k) => [p, SPOTS.d[k]]), ...l.f.map((p, k) => [p, SPOTS.f[k]])] : [];
     const kit = kitOf(t);
-    return luSpot(g, SPOTS.g, away, kit, 0, true) + skaters.map(([p, s], k) => luSpot(p, s, away, kit, k)).join('');
+    return luSpot(t.name, g, SPOTS.g, away, kit, 0, true) + skaters.map(([p, s], k) => luSpot(t.name, p, s, away, kit, k)).join('');
   };
   const focused = document.activeElement?.dataset?.step;
   dlg.innerHTML = `
