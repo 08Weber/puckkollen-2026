@@ -210,11 +210,13 @@ const pct = (v) => `${v.toFixed(1).replace('.', ',')} %`;
 
 // Points for skaters, save % for goalies (zeros before the first game); position + birth year only if stats failed to load.
 function playerMeta(t, p) {
+  // Swehockey's stats page lags the roster, so a late call-up has no row yet: show zeros, not the fallback.
+  const loaded = stats.players.size > 0;
   if (p.pos === 'GK') {
-    const s = stats.goalies.get(statKey(t, p));
+    const s = stats.goalies.get(statKey(t, p)) || (loaded && { gpi: 0 });
     if (s) return (s.gpi ? `<b>${pct(s.svsp)}</b>${s.gpi} m · ${s.ga} ins.` : '<b>– %</b>0 m') + utv(pimOf(t, p));
   } else {
-    const s = stats.players.get(statKey(t, p));
+    const s = stats.players.get(statKey(t, p)) || (loaded && { gp: 0, g: 0, a: 0, tp: 0, pim: 0 });
     if (s) return `<b>${s.tp} p</b>${s.g}+${s.a} · ${s.gp} m${utv(s.pim)}`;
   }
   return `<b>${POS[p.pos] || esc(p.pos)}${p.shoots ? ` · ${p.shoots === 'L' ? 'V' : 'H'}` : ''}</b>f. ${esc(p.born.slice(0, 4))}`;
