@@ -919,18 +919,10 @@ async function openLineup(g) {
 // All events of a game in the line-up dialog: goals, penalties, goalie changes, shootout. Refreshed every 20 s while live.
 const evs = { id: null, data: null, timer: 0 };
 const EV_SIT = { PP: 'Powerplay', SH: 'Boxplay', EN: 'Tom kasse', PS: 'Straffslag' };
-const EV_REASON = {
-  tripping: 'Fällning', hooking: 'Hakning', holding: 'Fasthållning', 'holding the stick': 'Hålla klubban', interference: 'Obstruktion',
-  'high sticking': 'Hög klubba', roughing: 'Ruffighet', crosschecking: 'Crosschecking', 'cross-checking': 'Crosschecking', slashing: 'Slag',
-  'delay of game': 'Fördröjning av spelet', kneeing: 'Knästick', boarding: 'Tackling mot sargen', 'too many players on the ice': 'För många spelare på isen',
-  'checking from behind': 'Tackling bakifrån', 'unsportsmanlike conduct': 'Osportsligt uppträdande', elbowing: 'Armbåge', charging: 'Charging',
-  spearing: 'Spjutning', 'butt-ending': 'Klubbände', 'illegal hit to the head': 'Otillåten tackling mot huvudet', 'head contact': 'Huvudtackling',
-  'misconduct': 'Personligt straff', 'game misconduct': 'Matchstraff', 'match penalty': 'Matchstraff', diving: 'Filmning', 'abuse of officials': 'Protest mot domare',
-};
 const evPeriod = (n) =>
   /^\d/.test(n) ? `${nth(+n[0])} perioden` : /^overtime/i.test(n) ? 'Förlängning' : /shots$/i.test(n) ? 'Straffläggning' : /winning shot/i.test(n) ? 'Avgörande straff' : n;
+// Penalty reasons stay in English as swehockey writes them (that's what hockey people say); only the penalty-shot notes are translated.
 const evNote = (s = '') =>
-  EV_REASON[s.toLowerCase()] ||
   s.replace(/^PenaltyShot$/i, 'Straffslag utdömt').replace(/Missed Penalty Shot/i, 'Missat straffslag').replace(/Saved By/i, '· räddat av');
 function evWho(team, p) {
   if (!p) return '';
