@@ -158,7 +158,8 @@ function matchCard(g, isNext, favNames = favTeamNames()) {
     : `<div class="when">${isNext ? '<span class="next-tag">Nästa</span>' : ''}<b>${esc(g.time)}</b><span>${dayShort.format(noon(g.date))}</span></div>`;
   const live = isLive(g);
   const info = live && liveInfo(g);
-  const status = live ? 'Live' : periods > 3 ? 'Slut · förl.' : periods === 3 || g.live ? 'Slut' : 'Pågår';
+  // Not live: finished unless still inside the time window without a final period count (games can have 2 periods).
+  const status = live ? 'Live' : periods > 3 ? 'Slutresultat · förl.' : periods === 3 || g.live || !inPlay(g) ? 'Slutresultat' : 'Pågår';
   const foot = `
     ${
       played
@@ -943,7 +944,7 @@ function renderEvents() {
   for (const c of codes) if (!side.has(c)) side.set(c, [g.home, g.away].find((n) => ![...side.values()].includes(n)) || c);
   const live = isLive(g);
   const info = live && liveInfo(g);
-  const status = live ? `<span class="state live">Live</span> · ${info.what}${info.clock ? ` · <b class="clock">${esc(info.clock)}</b>` : ''}` : g.hs != null ? 'Slut' : '';
+  const status = live ? `<span class="state live">Live</span> · ${info.what}${info.clock ? ` · <b class="clock">${esc(info.clock)}</b>` : ''}` : g.hs != null ? 'Slutresultat' : '';
   const item = (e) => {
     const team = side.get(e.team) || e.team;
     const who = evWho(team, e.player);
