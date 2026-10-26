@@ -944,7 +944,7 @@ function renderEvents() {
   for (const c of codes) if (!side.has(c)) side.set(c, [g.home, g.away].find((n) => ![...side.values()].includes(n)) || c);
   const live = isLive(g);
   const info = live && liveInfo(g);
-  const status = live ? `<span class="state live">Live</span> · ${info.what}${info.clock ? ` · <b class="clock">${esc(info.clock)}</b>` : ''}` : g.hs != null ? 'Slut' : '';
+  const status = live ? `<span><span class="state live">Live</span> · ${info.what}</span>${info.clock ? `<b class="clock">${esc(info.clock)}</b>` : ''}` : g.hs != null ? 'Slut' : '';
   const item = (e) => {
     const team = side.get(e.team) || e.team;
     const who = evWho(team, e.player);

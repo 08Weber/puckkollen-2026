@@ -757,8 +757,9 @@ tr.cut td { border-bottom: 2px dashed var(--muted); }
 .ev-score { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 10px; margin-bottom: 6px; }
 .ev-score > div:not(.ev-res) { display: grid; justify-items: center; gap: 6px; text-align: center; font-size: 13px; font-weight: 800; line-height: 1.2; }
 .ev-res { display: grid; justify-items: center; gap: 4px; padding-top: 6px; }
-.ev-res b { font-size: 34px; font-weight: 900; font-stretch: 115%; letter-spacing: -.02em; line-height: 1; }
-.ev-res small { font-size: 12px; color: #a9b5c8; white-space: nowrap; }
+.ev-res > b { font-size: 34px; font-weight: 900; font-stretch: 115%; letter-spacing: -.02em; line-height: 1; }
+.ev-res small { display: grid; justify-items: center; gap: 2px; font-size: 12px; color: #a9b5c8; text-align: center; }
+.ev-res .clock { font-size: 15px; font-weight: 800; color: #e2132f; font-variant-numeric: tabular-nums; }
 .ev-per { margin: 16px 2px 6px; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #8c9ab0; }
 .ev-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 .ev { display: grid; grid-template-columns: 44px auto 1fr; align-items: start; gap: 10px; padding: 9px 10px; border-radius: 12px; background: rgb(255 255 255 / .05); border-left: 3px solid #2f6df0; }
